@@ -1,4 +1,4 @@
-module firego-pion
+module firego
 
 go 1.19
 

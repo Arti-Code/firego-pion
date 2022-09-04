@@ -79,7 +79,7 @@ func waitForOffer(db *db.Client, ctx context.Context, device string) string {
 	for !offer_accepted {
 		_ = refSdp.Get(ctx, &sdp2)
 		fmt.Println("checking offer...")
-		fmt.Println(sdp2.Offer)
+		//fmt.Println(sdp2.Offer)
 		if sdp2.Offer != "" {
 			fmt.Println("new offer founded")
 			offer_accepted = true
