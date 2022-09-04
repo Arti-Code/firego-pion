@@ -25,5 +25,9 @@
 			"titleBar.inactiveForeground": "#e7e7e799"
 		},
 		"peacock.color": "#ff3d00"
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": []
 	}
 }

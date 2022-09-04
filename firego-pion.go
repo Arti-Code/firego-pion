@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+
+	//	"errors"
 	"fmt"
-	"io"
+	//	"io"
 	"net"
 	"time"
 
@@ -15,13 +17,26 @@ import (
 )
 
 type Session struct {
-	offer  string
-	answer string
+	Offer  string `json: "offer"`
+	Answer string `json: "answer"`
 }
+
+type SDP struct {
+	Type string `json: "type"`
+	Sdp  string `json: "sdp"`
+}
+
+//func (s *Session) getOffer() string {
+//	return s.Offer
+//}
+//
+//func (s *Session) getAnswer() string {
+//	return s.Answer
+//}
 
 func clearSession(db *db.Client, ctx *context.Context, device string) {
 	refSession := db.NewRef("signaling/" + device)
-	var emptySession Session = Session{offer: "", answer: ""}
+	var emptySession Session = Session{Offer: "", Answer: ""}
 	err := refSession.Set(*ctx, &emptySession)
 	if err != nil {
 		e := fmt.Errorf("error during session room clearing: %v", err)
@@ -56,6 +71,33 @@ func initStreamListener() *net.UDPConn {
 	return listener
 }
 
+func waitForOffer(db *db.Client, ctx context.Context, device string) string {
+	refSdp := db.NewRef("signaling/" + device)
+	//	var sdp map[string]interface{}
+	var sdp2 Session
+	var offer_accepted bool = false
+	for !offer_accepted {
+		_ = refSdp.Get(ctx, &sdp2)
+		fmt.Println("checking offer...")
+		fmt.Println(sdp2.Offer)
+		if sdp2.Offer != "" {
+			fmt.Println("new offer founded")
+			offer_accepted = true
+		} else {
+			time.Sleep(time.Second * 5)
+		}
+	}
+	return sdp2.Offer
+}
+
+func initVideoTrack() *webrtc.TrackLocalStaticRTP {
+	videoTrack, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8}, "video", "pion")
+	if err != nil {
+		panic(err)
+	}
+	return videoTrack
+}
+
 func main() {
 	var deviceName string = "biesior"
 	ctx, conf, opt := initFirebase(deviceName, "https://firego-pion-default-rtdb.firebaseio.com", "key.json")
@@ -63,7 +105,7 @@ func main() {
 	db := initDataBase(app, ctx)
 	pc := initPeerConnection()
 	listener := initStreamListener()
-
+	//	clearSession(db, &ctx, deviceName)
 	defer func() {
 		var err error
 		if err = listener.Close(); err != nil {
@@ -71,14 +113,8 @@ func main() {
 		}
 	}()
 
-	videoTrack, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8}, "video", "pion")
-	if err != nil {
-		panic(err)
-	}
-	rtpSender, err := pc.AddTrack(videoTrack)
-	if err != nil {
-		panic(err)
-	}
+	var videoTrack *webrtc.TrackLocalStaticRTP = initVideoTrack()
+	rtpSender, _ := pc.AddTrack(videoTrack)
 
 	go func() {
 		rtcpBuf := make([]byte, 1500)
@@ -100,59 +136,47 @@ func main() {
 	})
 
 	offer := webrtc.SessionDescription{}
+	//var s SDP
+	//var json_offer []byte
+	data := waitForOffer(db, ctx, deviceName)
+	_ = json.Unmarshal([]byte(data), &offer)
+	fmt.Println("OFFER:")
+	fmt.Println(offer.Type)
+	fmt.Println(offer.SDP)
 	//signal.Decode(signal.MustReadStdin(), &offer)
 
-	if err = pc.SetRemoteDescription(offer); err != nil {
-		panic(err)
-	}
-
-	answer, err := pc.CreateAnswer(nil)
-	if err != nil {
-		panic(err)
-	}
-
-	gatherComplete := webrtc.GatheringCompletePromise(pc)
-
-	if err = pc.SetLocalDescription(answer); err != nil {
-		panic(err)
-	}
-
-	<-gatherComplete
-
-	//fmt.Println(signal.Encode(*pc.LocalDescription()))
-
-	inboundRTPPacket := make([]byte, 1600) // UDP MTU
-	for {
-		n, _, err := listener.ReadFrom(inboundRTPPacket)
-		if err != nil {
-			panic(fmt.Sprintf("error during read: %s", err))
-		}
-
-		if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
-			if errors.Is(err, io.ErrClosedPipe) {
-				return
-			}
-
-			panic(err)
-		}
-	}
-
-	refSdl := db.NewRef("signaling/" + deviceName + "/offer")
-	var sdl string = ""
-	var offer_accepted bool = false
-	for !offer_accepted {
-		err = refSdl.Get(ctx, &sdl)
-		if err != nil {
-			e := fmt.Errorf("error getting sdl: %v", err)
-			fmt.Println(e)
-		}
-		fmt.Println("checking offer...")
-		if sdl != "" {
-			offer_accepted = true
-		} else {
-			time.Sleep(time.Second * 5)
-		}
-	}
-	fmt.Println("OFFER:")
-	fmt.Println(sdl)
+	//	if err = pc.SetRemoteDescription(offer); err != nil {
+	//		panic(err)
+	//	}
+	//
+	//	answer, err := pc.CreateAnswer(nil)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//
+	//	gatherComplete := webrtc.GatheringCompletePromise(pc)
+	//
+	//	if err = pc.SetLocalDescription(answer); err != nil {
+	//		panic(err)
+	//	}
+	//
+	//	<-gatherComplete
+	//
+	//	fmt.Println(signal.Encode(*pc.LocalDescription()))
+	//
+	//	inboundRTPPacket := make([]byte, 1600) // UDP MTU
+	//	for {
+	//		n, _, err := listener.ReadFrom(inboundRTPPacket)
+	//		if err != nil {
+	//			panic(fmt.Sprintf("error during read: %s", err))
+	//		}
+	//
+	//		if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
+	//			if errors.Is(err, io.ErrClosedPipe) {
+	//				return
+	//			}
+	//
+	//			panic(err)
+	//		}
+	//	}
 }
