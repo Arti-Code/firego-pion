@@ -26,18 +26,10 @@ type SDP struct {
 	Sdp  string `json: "sdp"`
 }
 
-//func (s *Session) getOffer() string {
-//	return s.Offer
-//}
-//
-//func (s *Session) getAnswer() string {
-//	return s.Answer
-//}
-
 func clearSession(db *db.Client, ctx *context.Context, device string) {
 	refSession := db.NewRef("signaling/" + device)
-	var emptySession Session = Session{Offer: "", Answer: ""}
-	err := refSession.Set(*ctx, &emptySession)
+	empty := map[string]string{"offer": "", "answer": ""}
+	err := refSession.Set(*ctx, empty)
 	if err != nil {
 		e := fmt.Errorf("error during session room clearing: %v", err)
 		fmt.Println(e)
@@ -114,7 +106,7 @@ func main() {
 	db := initDataBase(app, ctx)
 	pc := initPeerConnection()
 	listener := initStreamListener()
-	//	clearSession(db, &ctx, deviceName)
+	clearSession(db, &ctx, deviceName)
 	defer func() {
 		var err error
 		if err = listener.Close(); err != nil {
@@ -142,6 +134,14 @@ func main() {
 				panic(closeErr)
 			}
 		}
+	})
+
+	pc.OnDataChannel(func(channel *webrtc.DataChannel) {
+		msg := channel.Label()
+		fmt.Printf("data channel: %s \n", msg)
+		channel.OnMessage(func(msg webrtc.DataChannelMessage) {
+			fmt.Printf("->: %s \n", string(msg.Data))
+		})
 	})
 
 	offer := webrtc.SessionDescription{}

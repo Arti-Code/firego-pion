@@ -5,4 +5,8 @@ FIREGO:
         ✔ wait for offer
         ✔ set remote sdp
         ✔ create answer
-        ☐ send answer @started
+        ✔ send answer
+    [v0.2]:
+        ✔ accept datachannel
+        ✔ read datachannel message
+
