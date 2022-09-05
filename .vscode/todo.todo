@@ -1,0 +1,8 @@
+FIREGO: 
+    [v0.1]:
+        ✔ init firebase
+        ✔ init webrtc
+        ✔ wait for offer
+        ✔ set remote sdp
+        ✔ create answer
+        ☐ send answer @started
