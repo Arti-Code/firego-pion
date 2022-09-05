@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 
-	//	"errors"
 	"fmt"
-	//	"io"
 	"net"
 	"time"
 
@@ -90,6 +90,15 @@ func waitForOffer(db *db.Client, ctx context.Context, device string) string {
 	return sdp2.Offer
 }
 
+func sendAnswer(db *db.Client, ctx context.Context, device string, answer string) {
+	refSession := db.NewRef("signaling/" + device + "/answer")
+	err := refSession.Set(ctx, &answer)
+	if err != nil {
+		e := fmt.Errorf("error during answer: %v", err)
+		fmt.Println(e)
+	}
+}
+
 func initVideoTrack() *webrtc.TrackLocalStaticRTP {
 	videoTrack, err := webrtc.NewTrackLocalStaticRTP(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8}, "video", "pion")
 	if err != nil {
@@ -136,47 +145,47 @@ func main() {
 	})
 
 	offer := webrtc.SessionDescription{}
-	//var s SDP
-	//var json_offer []byte
 	data := waitForOffer(db, ctx, deviceName)
 	_ = json.Unmarshal([]byte(data), &offer)
 	fmt.Println("OFFER:")
 	fmt.Println(offer.Type)
 	fmt.Println(offer.SDP)
-	//signal.Decode(signal.MustReadStdin(), &offer)
 
-	//	if err = pc.SetRemoteDescription(offer); err != nil {
-	//		panic(err)
-	//	}
-	//
-	//	answer, err := pc.CreateAnswer(nil)
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//
-	//	gatherComplete := webrtc.GatheringCompletePromise(pc)
-	//
-	//	if err = pc.SetLocalDescription(answer); err != nil {
-	//		panic(err)
-	//	}
-	//
-	//	<-gatherComplete
-	//
-	//	fmt.Println(signal.Encode(*pc.LocalDescription()))
-	//
-	//	inboundRTPPacket := make([]byte, 1600) // UDP MTU
-	//	for {
-	//		n, _, err := listener.ReadFrom(inboundRTPPacket)
-	//		if err != nil {
-	//			panic(fmt.Sprintf("error during read: %s", err))
-	//		}
-	//
-	//		if _, err = videoTrack.Write(inboundRTPPacket[:n]); err != nil {
-	//			if errors.Is(err, io.ErrClosedPipe) {
-	//				return
-	//			}
-	//
-	//			panic(err)
-	//		}
-	//	}
+	if err := pc.SetRemoteDescription(offer); err != nil {
+		panic(err)
+	}
+
+	answer, err := pc.CreateAnswer(nil)
+	if err != nil {
+		panic(err)
+	}
+
+	gatherComplete := webrtc.GatheringCompletePromise(pc)
+
+	if err = pc.SetLocalDescription(answer); err != nil {
+		panic(err)
+	}
+
+	answer2, _ := json.Marshal(answer)
+
+	//fmt.Println(answer2)
+	sendAnswer(db, ctx, deviceName, string(answer2))
+
+	<-gatherComplete
+
+	inboundRTPPacket := make([]byte, 1600) // UDP MTU
+	for {
+		n, _, err := listener.ReadFrom(inboundRTPPacket)
+		if err != nil {
+			panic(fmt.Sprintf("error during read: %s", err))
+		}
+
+		if _, err := videoTrack.Write(inboundRTPPacket[:n]); err != nil {
+			if errors.Is(err, io.ErrClosedPipe) {
+				return
+			}
+
+			panic(err)
+		}
+	}
 }
